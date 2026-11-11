@@ -3,6 +3,7 @@ const pool = require("../config/database");
 const { sendShipmentNotificationEmail } = require("./emailService");
 const { sendWebhookNotification } = require("./webhookService");
 const { publishNotification } = require("./realtimeService");
+const { dispatchNotificationAsync } = require("./asyncNotificationAdapter");
 
 
 // ======================================================
@@ -264,63 +265,19 @@ const createShipmentNotification = async ({
                 notificationResult.rows[0];
 
             // ==================================================
-            // LIVE IN-APP PUSH (SSE)
-            // ==================================================
-            //
-            // Every notification in the system is created here, so this is
-            // the one place that needs to fan out to connected clients.
-
-            try {
-
-                publishNotification({
-                    ...createdNotification,
-                    tracking_number: shipment.tracking_number
-                });
-
-            } catch (realtimeError) {
-
-                console.error(
-                    "[NotificationService] Realtime push failed:",
-                    realtimeError.message
-                );
-
-            }
-
-            // ==================================================
-            // REAL EMAIL DELIVERY (IF ENABLED)
+            // ASYNCHRONOUS NOTIFICATION DISPATCH (REDIS + BULLMQ)
+            // Dispatches via BullMQ queue with automatic fallback
             // ==================================================
 
-            if (preferences.email_enabled && shipment.customer_email) {
-                // Fire and forget (non-blocking)
-                sendShipmentNotificationEmail({
-                    to: shipment.customer_email,
-                    customerName: shipment.customer_name,
-                    trackingNumber: shipment.tracking_number,
-                    status: normalizedStatus,
-                    title,
-                    message,
-                    priority: normalizedPriority
-                }).catch(emailErr => {
-                    console.error("[NotificationService] Async email dispatch error:", emailErr.message);
-                });
-            }
-
-            // ==================================================
-            // REAL WEBHOOK DELIVERY (IF ENABLED & URL REGISTERED)
-            // ==================================================
-
-            if (preferences.webhook_enabled && preferences.webhook_url) {
-                // Fire and forget with retry & logging (non-blocking)
-                sendWebhookNotification({
-                    webhookUrl: preferences.webhook_url,
-                    webhookSecret: preferences.webhook_secret,
-                    notification: createdNotification,
-                    customerId: shipment.customer_id,
-                    maxAttempts: 3
-                }).catch(webhookErr => {
-                    console.error("[NotificationService] Async webhook dispatch error:", webhookErr.message);
-                });
-            }
+            const deliveryStatus = await dispatchNotificationAsync({
+                createdNotification,
+                shipment,
+                preferences,
+                status: normalizedStatus,
+                title,
+                message,
+                priority: normalizedPriority
+            });
 
             return {
 
@@ -333,8 +290,9 @@ const createShipmentNotification = async ({
                     createdNotification,
 
                 delivery: {
-                    email_dispatched: Boolean(preferences.email_enabled && shipment.customer_email),
-                    webhook_dispatched: Boolean(preferences.webhook_enabled && preferences.webhook_url)
+                    email_dispatched: Boolean(deliveryStatus.email_dispatched),
+                    webhook_dispatched: Boolean(deliveryStatus.webhook_dispatched),
+                    queued: Boolean(deliveryStatus.queued)
                 }
 
             };

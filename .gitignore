@@ -13,3 +13,4 @@ build/
 # OS / editor noise
 .DS_Store
 *.log
+*.rdb

@@ -6,6 +6,7 @@ require("dotenv").config({
 const app = require("./src/app");
 const pool = require("./src/config/database");
 const { startDelayDetectionJob, stopDelayDetectionJob } = require("./src/jobs/delayDetectionJob");
+const { startNotificationWorker, stopNotificationWorker } = require("./src/workers/notificationWorker");
 
 // ======================================================
 // SERVER CONFIGURATION
@@ -31,10 +32,11 @@ const startServer = async () => {
         console.log("Database connection successful");
 
         // ==================================================
-        // START BACKGROUND JOBS
+        // START BACKGROUND JOBS & WORKERS
         // ==================================================
 
         startDelayDetectionJob();
+        startNotificationWorker();
 
         // ==================================================
         // START EXPRESS SERVER
@@ -108,6 +110,7 @@ const shutdown = async (signal) => {
     try {
 
         stopDelayDetectionJob();
+        await stopNotificationWorker();
 
         await pool.end();
 
