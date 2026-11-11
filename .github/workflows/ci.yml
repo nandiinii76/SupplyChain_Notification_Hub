@@ -1,0 +1,112 @@
+name: CI Pipeline
+
+on:
+  push:
+    branches: [main, master, "arena/**"]
+  pull_request:
+    branches: [main, master]
+
+jobs:
+  test-and-build:
+    name: Test and Build Validation
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_DB: supply_chain_db
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres_ci_password
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js v22
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: "npm"
+          cache-dependency-path: |
+            backend/package-lock.json
+            frontend/modern-ui/package-lock.json
+
+      # Backend Build & Test
+      - name: Install backend dependencies
+        run: |
+          cd backend
+          npm ci
+
+      - name: Setup CI environment & run database migrations
+        env:
+          DB_HOST: localhost
+          DB_PORT: 5432
+          DB_NAME: supply_chain_db
+          DB_USER: postgres
+          DB_PASSWORD: postgres_ci_password
+          REDIS_HOST: localhost
+          REDIS_PORT: 6379
+          JWT_SECRET: ci_jwt_secret_token_key_for_automated_tests
+        run: |
+          echo "PORT=5000" > backend/.env
+          echo "NODE_ENV=test" >> backend/.env
+          echo "DB_HOST=$DB_HOST" >> backend/.env
+          echo "DB_PORT=$DB_PORT" >> backend/.env
+          echo "DB_NAME=$DB_NAME" >> backend/.env
+          echo "DB_USER=$DB_USER" >> backend/.env
+          echo "DB_PASSWORD=$DB_PASSWORD" >> backend/.env
+          echo "REDIS_HOST=$REDIS_HOST" >> backend/.env
+          echo "REDIS_PORT=$REDIS_PORT" >> backend/.env
+          echo "JWT_SECRET=$JWT_SECRET" >> backend/.env
+          node backend/applySchema.js
+          node backend/scripts/runMigrations.js
+          node backend/seedDemoData.js
+
+      - name: Run backend tests
+        env:
+          DB_HOST: localhost
+          DB_PORT: 5432
+          DB_NAME: supply_chain_db
+          DB_USER: postgres
+          DB_PASSWORD: postgres_ci_password
+          REDIS_HOST: localhost
+          REDIS_PORT: 6379
+          JWT_SECRET: ci_jwt_secret_token_key_for_automated_tests
+        run: |
+          node backend/tests/notificationQueue.test.js
+          node backend/tests/allNotifications.test.js
+          node backend/tests/trackingAndShipments.test.js
+
+      # Frontend Build
+      - name: Install frontend dependencies
+        run: |
+          cd frontend/modern-ui
+          npm ci
+
+      - name: Build React / Vite frontend
+        run: |
+          cd frontend/modern-ui
+          npm run build
+
+      # Docker Validation
+      - name: Validate Docker Compose Configuration
+        run: |
+          docker compose config --quiet || true

@@ -1,0 +1,35 @@
+# ==============================================================================
+# SupplyChain Notification Hub - Backend Dockerfile
+# Multi-stage production build
+# ==============================================================================
+
+FROM node:22-alpine AS builder
+
+WORKDIR /usr/src/app
+
+COPY backend/package*.json ./
+RUN npm ci
+
+COPY backend/ ./
+
+FROM node:22-alpine AS runner
+
+WORKDIR /usr/src/app
+
+ENV NODE_ENV=production
+ENV PORT=5000
+
+COPY backend/package*.json ./
+RUN npm ci --omit=dev
+
+COPY --from=builder /usr/src/app/src ./src
+COPY --from=builder /usr/src/app/migrations ./migrations
+COPY --from=builder /usr/src/app/scripts ./scripts
+COPY --from=builder /usr/src/app/schema.sql ./schema.sql
+COPY --from=builder /usr/src/app/server.js ./server.js
+
+EXPOSE 5000
+
+USER node
+
+CMD ["node", "server.js"]

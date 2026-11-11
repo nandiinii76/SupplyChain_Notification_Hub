@@ -12,6 +12,7 @@ import UsersView from './views/UsersView'
 import AuditLogView from './views/AuditLogView'
 import SettingsView from './views/SettingsView'
 import ApprovalsView from './views/ApprovalsView'
+import LiveTrackingDashboard from './views/LiveTrackingDashboard'
 
 import { useAuth } from './lib/auth'
 import { useNotifications } from './lib/notifications'
@@ -40,6 +41,7 @@ const panelVariant = {
 const NAV_ITEMS = [
   { key: 'dashboard', label: 'Analytics', roles: ['ADMIN', 'OPERATIONS'] },
   { key: 'shipments', label: 'Shipments' },
+  { key: 'tracking', label: 'Live Tracking' },
   { key: 'approvals', label: 'Approvals', roles: ['ADMIN', 'OPERATIONS'] },
   { key: 'notifications', label: 'Notifications' },
   { key: 'carriers', label: 'Carriers', roles: ['ADMIN', 'OPERATIONS'] },
@@ -217,6 +219,7 @@ function AppShell() {
             <motion.div variants={panelVariant}>
               {view === 'dashboard' && <Dashboard />}
               {view === 'shipments' && <Shipments />}
+              {view === 'tracking' && <LiveTrackingDashboard />}
               {view === 'approvals' && <ApprovalsView />}
               {view === 'notifications' && <NotificationsView />}
               {view === 'carriers' && <CarriersView />}

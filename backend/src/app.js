@@ -18,6 +18,7 @@ const userRoutes = require("./routes/userRoutes");
 const auditLogRoutes = require("./routes/auditLogRoutes");
 const jobRoutes = require("./routes/jobRoutes");
 const filterRoutes = require("./routes/filterRoutes");
+const trackingRoutes = require("./routes/trackingRoutes");
 
 
 // ======================================================
@@ -235,6 +236,16 @@ app.use(
 app.use(
     "/api/dashboard",
     dashboardRoutes
+);
+
+
+// ======================================================
+// REAL-TIME SHIPMENT TRACKING ROUTES (FEATURE B)
+// ======================================================
+
+app.use(
+    "/api/tracking",
+    trackingRoutes
 );
 
 
